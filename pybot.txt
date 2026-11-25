@@ -1,0 +1,552 @@
+第 1 段：产品定义 + 总体架构
+开发一个名为“TL;DR Crawler”的 Chrome 扩展程序，使用 Manifest V3，纯 JavaScript 实现，不使用任何第三方库。该扩展需要能够在普通网页上运行，并通过一只会“爬行”的蜘蛛，让用户以一种直观、可视化的方式阅读网页、发现关键句子并实时生成 TL;DR 摘要。
+核心体验：
+点击 Chrome 工具栏图标后，当前网页上出现一只线条绘制的蜘蛛。蜘蛛跟随用户光标移动，在用户滚动页面时也继续跟随，并读取蜘蛛爬过的文本。
+蜘蛛读取文本后：
+* 提取关键句子。
+* 对关键句子进行高亮。
+* 在右上角浮动面板中实时生成简短 TL;DR。
+* 当蜘蛛踩到普通单词时，有一定概率让该单词产生“故障/glitch”视觉效果。
+* 用户继续滚动页面时，蜘蛛继续阅读新出现的内容。
+* 对无限滚动、延迟加载的文本保持支持。
+* 用户可以复制已经发现的 TL;DR。
+* 如果配置了 Anthropic API Key，可以使用 Claude 对关键内容进行进一步总结。
+再次点击 Chrome 工具栏图标时，整个系统必须关闭，并完全恢复网页原状。
+总体架构：
+background.js
+→ 负责 Chrome 扩展生命周期、工具栏点击以及 API 请求。
+content.js
+→ 注入当前网页。
+→ 创建蜘蛛。
+→ 识别网页文本。
+→ 追踪蜘蛛位置。
+→ 检测蜘蛛踩到的文本。
+→ 管理高亮、glitch 效果和浮动面板。
+options.html / options.js
+→ 管理 Anthropic API Key 和模型名称。
+每个标签页最多只能运行一个 TL;DR Crawler 实例。
+第 2 段：切换 + 网页文本识别
+1. 切换
+background.js 使用：
+chrome.action.onClicked
+监听 Chrome 工具栏图标点击。
+点击后：
+chrome.scripting.executeScript
+向当前标签页注入 content.js。
+content.js 必须检查一个全局标志。
+如果蜘蛛已经运行：
+* 停止所有动画。
+* 停止所有计时器。
+* 停止 MutationObserver。
+* 删除 Shadow DOM。
+* 删除 canvas。
+* 删除浮动面板。
+* 删除 CSS Custom Highlight。
+* 删除所有 glitch span。
+* 恢复被修改的文本。
+* 清理所有事件监听器。
+* 清理所有资源。
+* 页面恢复原状。
+如果蜘蛛没有运行：
+* 创建一个新的 TL;DR Crawler 实例。
+* 设置全局运行状态。
+* 启动蜘蛛。
+* 扫描页面文本。
+* 创建摘要面板。
+* 开始动画和文本检测。
+每个标签页只能存在一个实例。
+2. 找到文本
+首先寻找网页主要可读区域。
+优先级：
+<article>
+<main>
+3. 如果不存在，则寻找包含最多段落文本的主要元素。
+必须跳过：
+* nav
+* header
+* footer
+* aside
+* sidebar
+* menu
+* form
+* input
+* textarea
+* select
+* script
+* style
+* pre
+* code
+* 广告区域
+* 隐藏元素
+* display:none 元素
+* visibility:hidden 元素
+* aria-hidden=true 元素
+* 扩展程序自身创建的元素
+收集以下文本块：
+* p
+* li
+* blockquote
+* h2
+* h3
+* h4
+将这些文本块进一步拆分为句子。
+每个句子必须保存为一个 DOM Range。
+不要直接把句子包裹在 HTML 元素中，因为句子可能跨越：
+<a>
+<strong>
+<em>
+<b>
+* 其他内联元素
+因此必须使用 DOM Range 表示句子，而不是修改原始 DOM 结构。
+需要为每个句子保存：
+* sentence text
+* DOM Range
+* 所属段落
+* 所属文本块
+* 在文章中的顺序
+* 是否为关键句
+* 是否已经被蜘蛛发现
+* 对应摘要
+使用防抖 MutationObserver 监视主要内容区域。
+防抖时间：
+1 秒。
+用于检测：
+* 无限滚动加载的新文本
+* 延迟加载的新文本
+* AJAX 加载的新文本
+* SPA 动态插入的新内容
+当检测到新文本时：
+重新扫描新增区域，但不要重复添加已经存在的句子。
+第 3 段：关键句选择 + TL;DR 算法
+3. 选择关键句子
+为每一个句子计算一个重要性分数。
+基础规则：
+包含数字：
++2
+包含 %：
++2
+包含 $：
++2
+包含 €：
++2
+包含“百万”：
++2
+包含“十亿”：
++2
+包含以下重要词语：
+“第一”
+“记录”
+“启动”
+“宣布”
+“新的”
+“唯一”
+“最大的”
+“最快的”
+“警告”
+“提高”
+“削减”
+每出现一个重要词：
++1.5
+每个大写字母：
++0.3
+大写字母加分最高：
++2
+长度少于 40 个字符：
+-2
+长度超过 260 个字符：
+-2
+根据最终分数排序。
+选择前 25% 的句子作为关键句。
+但是：
+最少 5 个。
+最多 80 个。
+同时进行空间分散处理，避免所有关键句集中在文章的一小部分。
+目标是让文章的大多数主要段落都能够获得至少一个关键句。
+每个关键句必须保存：
+* 原始句子
+* DOM Range
+* score
+* paragraph index
+* article index
+* found 状态
+* summary 状态
+4. TL;DR 摘要
+每个关键句对应一个非常短的摘要。
+摘要长度：
+最多 9 个单词。
+如果用户已经配置 Anthropic API Key：
+将关键句批量发送给 Claude。
+要求 Claude：
+* 返回 JSON 数组。
+* 每个摘要最多 9 个单词。
+* 保留数字。
+* 保留人名。
+* 保留公司名。
+* 不得改变数字。
+* 不得夸大原文。
+* 不得添加原文不存在的事实。
+* 摘要必须简短、直接。
+* 按输入句子的顺序返回。
+当发现新的关键句时：
+只发送新增关键句，进行增量批处理。
+不要每次重新发送整个页面。
+如果没有 API Key：
+使用本地 fallback 摘要。
+fallback 方法：
+首先删除句子开头的填充词，例如：
+and
+but
+however
+also
+according to
+然后在单词边界处截断。
+如果超过允许长度，则使用：
+…
+作为截断标记。
+fallback 必须完全在本地运行，不需要网络请求。
+第 4 段：蜘蛛视觉 + 运动系统
+5. 蜘蛛
+在 document.documentElement 下创建一个 Shadow DOM host。
+Shadow DOM host：
+* position: fixed
+* top: 0
+* left: 0
+* width: 100%
+* height: 100%
+* pointer-events: none
+* z-index: 2147483646
+Shadow DOM 内包含：
+1. 全屏 canvas
+2. 浮动 TL;DR 面板
+蜘蛛使用 Canvas 绘制。
+视觉设计：
+身体：
+小型圆角矩形。
+腹部：
+椭圆形。
+头部：
+两个白色眼睛。
+主要轮廓颜色：
+#5ab8ff
+蜘蛛拥有 8 条腿。
+腿：
+* 3px 蓝色线条
+* 粉色关节点
+* 每条腿分为两节
+* 使用反向运动学 IK
+* 膝盖向外弯曲
+蜘蛛采用两组交替步态。
+只有满足以下条件才允许迈步：
+1. 当前脚距离理想落脚位置约 80px。
+2. 另一组脚仍然保持着地。
+3. 当前没有正在进行的步态动画。
+每一步持续：
+0.13 秒。
+脚步动作：
+* 略微抬脚。
+* 向目标位置移动。
+* 落地时脚尖略微向前。
+* 根据当前移动方向调整脚尖方向。
+6. 蜘蛛移动
+蜘蛛目标位置：
+cursor position + scroll offset
+这样当用户滚动页面时，蜘蛛仍然能够保持跟随光标。
+最大移动速度：
+约 420 px/s。
+移动必须：
+* 平滑加速
+* 平滑减速
+* 平滑转向
+当蜘蛛距离目标位置约：
+40px
+时停止继续靠近。
+蜘蛛身体方向需要平滑朝向移动方向。
+如果光标静止超过：
+8 秒
+蜘蛛不应该完全停止。
+此时蜘蛛应该在当前视口区域内进行自然的小范围游走。
+动画：
+使用 requestAnimationFrame。
+物理模拟使用固定时间步长：
+1 / 120 秒。
+必须支持：
+* devicePixelRatio
+* 浏览器窗口大小变化
+* 页面缩放
+* 不同显示器 DPI
+prefers-reduced-motion：
+如果用户开启 prefers-reduced-motion：
+* 降低蜘蛛移动速度。
+* 降低动画频率。
+* 减少视觉故障效果。
+* 保持功能正常。
+第 5 段：蜘蛛爬行 + 文本故障效果
+7. 爬行与文本检测
+每隔：
+80ms
+检查蜘蛛脚下的文本。
+同时，在每次蜘蛛脚落地时执行一次检测。
+使用：
+document.caretRangeFromPoint
+寻找蜘蛛脚所在位置对应的文本。
+如果浏览器不支持 caretRangeFromPoint，则实现兼容 fallback。
+检测时必须忽略扩展程序自身创建的元素。
+如果蜘蛛脚下的文本属于一个尚未发现的关键句：
+使用 CSS Custom Highlight API 创建：
+::highlight(tldr-found)
+背景颜色：
+柔和黄色。
+不要修改原始文本结构。
+同时：
+* 将该关键句标记为 found。
+* 获取该句对应的摘要。
+* 将摘要加入 TL;DR 面板。
+* 更新 found / total 计数。
+* 更新进度条。
+如果蜘蛛踩到的是普通单词：
+约有 25% 的概率触发 glitch。
+必须确保不会破坏网页结构。
+将目标单词限制为单独的文本节点，然后用 span 包裹。
+每个单词最多同时应用两种 glitch 效果。
+随机选择以下视觉效果：
+1. 等宽字体
+2. 蓝色轮廓
+3. 蓝色高亮
+4. 轻微旋转
+5. 增加字间距
+6. 模糊
+7. 大写
+所有修改必须被记录。
+例如：
+original text node
+original parent
+original position
+created span
+original styles
+这样关闭扩展时能够完全撤销。
+绝不能永久修改网页内容。
+如果网页正在进行：
+* 文本选择
+* 鼠标点击
+* 链接点击
+* 滚动
+* 输入
+扩展都不能阻止这些原有行为。
+第 6 段：浮动面板 + 交互
+8. TL;DR 面板
+面板位于右上角。
+面板必须放在 Shadow DOM 内，因此网页自己的 CSS 不得影响面板。
+视觉：
+背景：
+#16181c
+标题：
+TL;DR
+标题颜色：
+#ffd166
+显示：
+已找到 / 总计
+例如：
+4 / 17
+显示粉色进度条。
+进度条表示：
+已发现关键句 / 全部关键句。
+面板中显示按照文章顺序排列的编号列表。
+例如：
+1. OpenAI 发布新模型……
+2. 公司收入达到……
+3. 新系统将于……
+4. 研究人员发现……
+最新发现的条目：
+* 闪烁黄色。
+* 自动滚动到最新条目。
+* 列表区域有最大高度。
+* 超出高度后只滚动列表，不影响网页。
+面板标题可以拖动。
+拖动标题可以改变面板位置。
+按钮：
+“复制 TL;DR”
+功能：
+将当前所有 TL;DR 以纯文本形式复制到剪贴板。
+“重新启动”
+功能：
+* 删除所有高亮。
+* 删除所有 glitch。
+* 清空 TL;DR 列表。
+* 重置 found 状态。
+* 重置计数器。
+* 重新扫描页面。
+* 重新启动蜘蛛。
+“关闭”
+功能：
+完全关闭扩展。
+必须执行完整 cleanup。
+如果配置了 API Key：
+增加按钮：
+“用 Claude 的语言写出 TL;DR”
+点击后：
+将所有已经发现的关键句发送给 Claude。
+要求返回：
+3 行简短句子。
+每一行只能使用原文中的事实。
+不得加入新的事实。
+数字必须保持完全一致。
+显示：
+“思考中……”
+完成后：
+在 TL;DR 列表下方显示 Claude 的最终答案。
+如果 API 请求失败：
+不要破坏现有功能。
+保留已经生成的 fallback 摘要。
+显示：
+“AI 不可用”
+第 7 段：API + 配置 + 错误处理
+9. API Key
+创建：
+options.html
+options.js
+options 页面包含：
+Anthropic API Key 输入框。
+模型名称输入框。
+使用：
+chrome.storage.local
+保存：
+* API Key
+* model name
+不要把 API Key 硬编码到任何 JavaScript 文件中。
+所有 Anthropic API 请求必须由 background.js 发起。
+使用：
+fetch
+请求：
+api.anthropic.com/v1/messages
+请求头：
+x-api-key
+anthropic-version: 2023-06-01
+content-type: application/json
+content-type：
+application/json
+background.js 接收来自 content.js 的请求，然后：
+1. 读取 chrome.storage.local 中的 API Key。
+2. 构造 Anthropic API 请求。
+3. 发起 fetch。
+4. 解析结果。
+5. 将结果返回给 content.js。
+API 请求必须支持：
+* 超时
+* 网络错误
+* API 错误
+* JSON 解析错误
+* 空响应
+* 无效响应
+错误必须静默处理。
+如果 API 调用失败：
+* 不得让蜘蛛停止。
+* 不得让页面停止。
+* 不得清除已经找到的内容。
+* 保留 fallback 摘要。
+* 在面板显示简短提示：
+“AI 不可用”
+新增文本出现时：
+不要重新发送整个网页。
+只发送新增关键句。
+需要对请求进行批处理，避免产生大量 API 请求。
+如果多个关键句在短时间内出现：
+进行 debounce / batching。
+尽量使用一次请求处理多个新增关键句。
+第 8 段：工程质量 + 文件结构 + 安装
+10. 工程质量要求
+整个扩展必须使用：
+纯 JavaScript。
+禁止第三方库。
+Manifest：
+Manifest V3。
+文件：
+manifest.json
+background.js
+content.js
+options.html
+options.js
+图标：
+icon16.png
+icon48.png
+icon128.png
+权限：
+activeTab
+scripting
+storage
+Host permissions：
+api.anthropic.com/*
+质量要求：
+绝不能中断网页原本的：
+* 滚动
+* 点击
+* 链接
+* 文本选择
+* 输入
+* 键盘操作
+关闭扩展时必须完全清理：
+* canvas
+* Shadow DOM host
+* TL;DR 面板
+* CSS Custom Highlight
+* 所有 glitch span
+* 所有 inline styles
+* 所有事件监听器
+* MutationObserver
+* requestAnimationFrame
+* setTimeout
+* setInterval
+* API 请求状态
+* 蜘蛛动画状态
+* 内部数据结构
+网页关闭后或者 SPA 页面发生路由变化时：
+不能产生孤儿监听器。
+不能产生多个蜘蛛实例。
+不能重复创建面板。
+所有动态 DOM 操作必须尽量避免破坏原网页结构。
+对于文本修改：
+必须能够在关闭时恢复原始 DOM。
+代码必须考虑：
+* 普通文章网页
+* 新闻网站
+* 博客
+* 文档网站
+* 无限滚动网页
+* SPA
+* 动态加载内容
+* 不同屏幕尺寸
+* devicePixelRatio
+* prefers-reduced-motion
+如果某个浏览器 API 不可用：
+实现兼容 fallback，而不是让整个扩展崩溃。
+11. 最终交付
+最终提供完整可运行的 Chrome Extension 文件：
+manifest.json
+background.js
+content.js
+options.html
+options.js
+icon16.png
+icon48.png
+icon128.png
+代码必须可以直接通过 Chrome 的“加载已解压的扩展”运行。
+不要只给伪代码。
+不要省略关键实现。
+不要使用“TODO”代替实际代码。
+不要要求用户自己补充核心逻辑。
+如果发现 API、浏览器兼容性或 Manifest V3 存在问题，应主动调整实现，但不能删除核心产品功能。
+12. 安装步骤
+完成后给出明确安装步骤：
+1. 打开 Chrome。
+2. 地址栏输入：
+chrome://extensions
+3. 打开“开发者模式”。
+4. 点击“加载已解压的扩展”。
+5. 选择包含 manifest.json 的扩展文件夹。
+6. 加载完成后打开扩展的“选项”。
+7. 粘贴 Anthropic API Key。
+8. 填写模型名称。
+9. 保存设置。
+10. 打开任意普通网页。
+11. 点击 Chrome 工具栏中的 TL;DR Crawler 图标。
+12. 蜘蛛开始跟随光标并阅读网页。
+13. 再次点击图标即可关闭并恢复网页原状。

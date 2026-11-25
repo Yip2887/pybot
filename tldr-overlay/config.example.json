@@ -1,0 +1,18 @@
+{
+    "apiKey": "",
+    "model": "claude-3-5-haiku-latest",
+    "speedCap": 420,
+    "stepMs": 130,
+    "glitch": 0.25,
+    "maxWords": 9,
+    "minChars": 8,
+    "watchX": 0,
+    "watchY": 0,
+    "watchW": 0,
+    "watchH": 0,
+    "watchScale": 3,
+    "watchIntervalMs": 900,
+    "alertFilter": "",
+    "alertBeep": false,
+    "alertRequireType": true
+}

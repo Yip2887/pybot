@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "TL;DR Crawler",
+  "version": "1.0.0",
+  "description": "A line-art spider crawls the page with your cursor, reads it, highlights key sentences and builds a live TL;DR summary.",
+  "minimum_chrome_version": "105",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["https://api.anthropic.com/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "TL;DR Crawler (click to start / stop)",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  }
+}

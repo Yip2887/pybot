@@ -1,0 +1,8 @@
+# logs and temp output produced by the overlay at runtime
+*.log
+*.tmp
+
+# OS clutter
+Thumbs.db
+desktop.ini
+.DS_Store

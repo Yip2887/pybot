@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TL;DR Crawler fixture</title>
+<style>
+  body { margin: 0; background: #f6f7f9; color: #14171c; font: 16px/1.6 Georgia, serif; }
+  nav { background: #101318; color: #eee; padding: 10px 24px; font-family: system-ui, sans-serif; font-size: 14px; }
+  .wrap { display: flex; gap: 24px; max-width: 1100px; margin: 0 auto; padding: 24px; }
+  article { flex: 1 1 auto; min-width: 0; }
+  aside { flex: 0 0 220px; font-family: system-ui, sans-serif; font-size: 13px; color: #555; }
+  h2 { font-size: 26px; margin: 0 0 16px; }
+  p { margin: 0 0 18px; }
+  footer { padding: 24px; color: #777; font-family: system-ui, sans-serif; font-size: 13px; }
+</style>
+</head>
+<body>
+  <nav>NAV-ONLY. This navigation sentence must never be read by the spider. A second navigation sentence here.</nav>
+
+  <div class="wrap">
+    <article id="article">
+      <h2>The launch nobody expected</h2>
+      <p>Orbital Labs announced a new launch vehicle on Tuesday morning. The company said the first flight would happen in March 2027. Analysts described the timing as unusually aggressive for a startup.</p>
+      <p>The rocket carries 24 satellites into low orbit. Orbital Labs claims the price per kilogram dropped 38% compared with its previous model. That figure would make it the cheapest option on the market today.</p>
+      <p>Investors committed $450 million in the latest funding round. The money pays for a second launch pad in Portugal. Construction starts next quarter according to the company statement.</p>
+      <p>Engineers recorded a record 300 second burn during the static fire test. The team warned that the upper stage still needs two more qualification cycles. Those tests are scheduled for the summer.</p>
+      <p>Regulators must approve the flight profile before any launch date is final. A spokesman said the paperwork was submitted in January. The agency has not published a decision yet.</p>
+      <p>The company also cut its workforce by 12% last year. Executives said the reduction funded research rather than marketing. Nobody expects a profit before 2029.</p>
+    </article>
+
+    <aside class="sidebar">SIDEBAR-ONLY. This sidebar sentence must never be read by the spider. A third sidebar sentence with the number 999 inside it.</aside>
+  </div>
+
+  <p style="display:none">HIDDEN-ONLY. This hidden sentence with the number 777 must never be read by the spider.</p>
+
+  <pre>PRE-ONLY. This preformatted sentence with the number 555 must never be read by the spider.</pre>
+
+  <footer>FOOTER-ONLY. This footer sentence must never be read by the spider.</footer>
+</body>
+</html>
